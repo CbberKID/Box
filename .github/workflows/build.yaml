@@ -1,57 +1,31 @@
-name: Android Build
+name: Test Build
 
 on:
+#  push:
+#    branches:
+#      - main
+#  pull_request:
   workflow_dispatch:
-  push:
-    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v3
         with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Install Essential Tools
+          fetch-depth: 0
+      - name: Build With Gradle
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libxml2-utils dos2unix
-
-      - name: Fix QuickJS Manifest
+          chmod +x gradlew
+          ./gradlew assemblerelease --build-cache --parallel --daemon --warning-mode all
+      - name: Prepare App
         run: |
-          if [ -f "quickjs/src/main/AndroidManifest.xml" ]; then
-            # 1. 清除BOM头并标准化换行符（解决网页3提到的二进制干扰问题）
-            sed -i '1s/^\xEF\xBB\xBF//' quickjs/src/main/AndroidManifest.xml
-            dos2unix quickjs/src/main/AndroidManifest.xml
-
-            # 2. 强制重置XML声明位置（应对网页9的根标签错误）
-            sed -i '/<?xml version/d' quickjs/src/main/AndroidManifest.xml
-            sed -i '1i<?xml version="1.0" encoding="utf-8"?>' quickjs/src/main/AndroidManifest.xml
-
-            # 3. 修复根标签结构（参考网页7的XML规范）
-            sed -i '/<manifest/d' quickjs/src/main/AndroidManifest.xml
-            sed -i '2i<manifest xmlns:android="http://schemas.android.com/apk/res/android"' quickjs/src/main/AndroidManifest.xml
-            if ! grep -q "</manifest>" quickjs/src/main/AndroidManifest.xml; then
-              echo "</manifest>" >> quickjs/src/main/AndroidManifest.xml
-            fi
-
-            # 4. 防御性格式化（结合网页6的XML修复技巧）
-            xmllint --format -o quickjs/src/main/AndroidManifest.xml quickjs/src/main/AndroidManifest.xml
-            xmllint --noout quickjs/src/main/AndroidManifest.xml || (echo "❌ 最终XML校验失败"; exit 1)
-          fi
-
-      - name: Build Debug APK
-        run: |
-          ./gradlew clean assembleDebug --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+          mkdir -p ${{ github.workspace }}/apk/
+          for file in `find ~ -name "*.apk" -print`; do
+            mv "$file" ${{ github.workspace }}/apk/
+          done
+      - name: Upload App To Artifact
+        uses: actions/upload-artifact@v3
         with:
-          name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: com.github.tvbox.osc
+          path: ${{ github.workspace }}/apk/*
