@@ -33,7 +33,7 @@ jobs:
       - name: Add Namespaces for All Modules
         run: |
           # 自动为所有模块添加命名空间（示例包名，需替换为你的包名）
-          find . -name 'build.gradle' -exec sed -i "/android {/a \    namespace 'com.example.yourapp'" {} +
+          find . -name 'build.gradle' -exec sed -i "/android {/a \    namespace 'com.github.tvbox.osc'" {} +
 
       - name: Force Dependency Resolution
         run: |
