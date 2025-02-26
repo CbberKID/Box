@@ -19,7 +19,7 @@ jobs:
           java-version: '17'
 
       - name: Fix Gradle Permissions
-        run: chmod +x ./gradlew  # 强制修复 gradlew 权限[2](@ref)
+        run: chmod +x ./gradlew
 
       - name: Upgrade Gradle to 8.2
         run: |
@@ -27,18 +27,25 @@ jobs:
 
       - name: Update AGP to 8.2.0
         run: |
-          # 替换所有模块的 AGP 版本（兼容单双引号）
           find . -name 'build.gradle' -exec sed -i -E "s/(com\.android\.tools\.build:gradle:)[^'\"]+/\18.2.0/g" {} +
 
-      - name: Add Namespaces for All Modules
+      - name: Clean Legacy Manifest Packages
         run: |
-          # 自动为所有模块添加命名空间（示例包名，需替换为你的包名）
-          find . -name 'build.gradle' -exec sed -i "/android {/a \    namespace 'com.github.tvbox.osc'" {} +
+          # 清理所有模块的 AndroidManifest.xml 中的 package 属性
+          find . -name 'AndroidManifest.xml' -exec sed -i '/package=".*"/d' {} +
+          echo "=== Manifest 清理验证 ==="
+          grep -r 'package=' */src/main/AndroidManifest.xml || echo "✅ 无残留 package 属性"
 
-      - name: Force Dependency Resolution
+      - name: Inject Namespaces
         run: |
-          # 强制统一 AGP 和 Kotlin 插件版本
-          echo -e "\nallprojects {\n  configurations.all {\n    resolutionStrategy.force 'com.android.tools.build:gradle:8.2.0'\n    resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20'\n  }\n}" >> build.gradle
+          # 动态注入命名空间（适配多模块）
+          find . -name 'build.gradle' -exec sed -i "/android {/a \    namespace 'com.github.tvbox.osc'" {} +
+          echo "=== 命名空间注入验证 ==="
+          grep -r "namespace 'com.github.tvbox.osc'" .
+
+      - name: Force Dependency Versions
+        run: |
+          echo -e "\nallprojects {\n  configurations.all {\n    resolutionStrategy {\n      force 'com.android.tools.build:gradle:8.2.0'\n      force 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20'\n    }\n  }\n}" >> build.gradle
 
       - name: Build Debug APK
         run: |
