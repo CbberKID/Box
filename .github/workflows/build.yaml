@@ -26,31 +26,31 @@ jobs:
       - name: Fix QuickJS Manifest
         run: |
           if [ -f "quickjs/src/main/AndroidManifest.xml" ]; then
-            # 1. 标准化换行符（解决网页5提到的跨平台编码问题）
+            # 1. 清除BOM头并标准化换行符（解决网页3提到的二进制干扰问题）
+            sed -i '1s/^\xEF\xBB\xBF//' quickjs/src/main/AndroidManifest.xml
             dos2unix quickjs/src/main/AndroidManifest.xml
-            
-            # 2. 修复根标签缺失问题（针对网页7中的语法错误）
-            sed -i '1s/^/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" \n/' quickjs/src/main/AndroidManifest.xml
-            sed -i '2s/^/    /' quickjs/src/main/AndroidManifest.xml  # 缩进第二行
-            
-            # 3. 强制闭合标签（符合网页4的XML规范）
+
+            # 2. 强制重置XML声明位置（应对网页9的根标签错误）
+            sed -i '/<?xml version/d' quickjs/src/main/AndroidManifest.xml
+            sed -i '1i<?xml version="1.0" encoding="utf-8"?>' quickjs/src/main/AndroidManifest.xml
+
+            # 3. 修复根标签结构（参考网页7的XML规范）
+            sed -i '/<manifest/d' quickjs/src/main/AndroidManifest.xml
+            sed -i '2i<manifest xmlns:android="http://schemas.android.com/apk/res/android"' quickjs/src/main/AndroidManifest.xml
             if ! grep -q "</manifest>" quickjs/src/main/AndroidManifest.xml; then
-              echo -e "\n</manifest>" >> quickjs/src/main/AndroidManifest.xml
+              echo "</manifest>" >> quickjs/src/main/AndroidManifest.xml
             fi
-            
-            # 4. XML格式化与验证（参考网页7的推荐方法）
+
+            # 4. 防御性格式化（结合网页6的XML修复技巧）
             xmllint --format -o quickjs/src/main/AndroidManifest.xml quickjs/src/main/AndroidManifest.xml
+            xmllint --noout quickjs/src/main/AndroidManifest.xml || (echo "❌ 最终XML校验失败"; exit 1)
           fi
 
-      - name: Validate Manifest Syntax
-        run: |
-          xmllint --noout quickjs/src/main/AndroidManifest.xml || (echo "❌ XML 校验失败"; exit 1)
-
-      - name: Build APK
+      - name: Build Debug APK
         run: |
           ./gradlew clean assembleDebug --stacktrace
 
-      - name: Upload Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
