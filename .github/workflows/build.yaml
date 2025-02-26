@@ -31,14 +31,26 @@ jobs:
 
       - name: Clean Legacy Manifest Packages
         run: |
-          # 清理所有模块的 AndroidManifest.xml 中的 package 属性
-          find . -name 'AndroidManifest.xml' -exec sed -i '/package=".*"/d' {} +
+          # 清理所有模块的 AndroidManifest.xml 中的 package 属性（含第三方库）
+          find . -path '*/src/main/AndroidManifest.xml' -exec sed -i '/package=".*"/d' {} +
           echo "=== Manifest 清理验证 ==="
           grep -r 'package=' */src/main/AndroidManifest.xml || echo "✅ 无残留 package 属性"
 
+      - name: Fix QuickJS Manifest
+        run: |
+          # 专项修复 quickjs 模块的 Manifest
+          if [ -f "quickjs/src/main/AndroidManifest.xml" ]; then
+            # 1. 添加必要属性
+            sed -i '/<manifest / a xmlns:tools="http://schemas.android.com/tools"' quickjs/src/main/AndroidManifest.xml
+            # 2. 修复 exported 属性
+            sed -i '/<activity/{/android:exported/!s/<activity/<activity android:exported="true"/g}' quickjs/src/main/AndroidManifest.xml
+            # 3. XML 语法校验
+            xmllint --noout quickjs/src/main/AndroidManifest.xml || (echo "❌ XML 语法错误"; exit 1)
+          fi
+
       - name: Inject Namespaces
         run: |
-          # 动态注入命名空间（适配多模块）
+          # 动态注入命名空间（适配你的包名）
           find . -name 'build.gradle' -exec sed -i "/android {/a \    namespace 'com.github.tvbox.osc'" {} +
           echo "=== 命名空间注入验证 ==="
           grep -r "namespace 'com.github.tvbox.osc'" .
