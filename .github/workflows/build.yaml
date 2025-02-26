@@ -37,7 +37,7 @@ jobs:
         run: |
           find . -path '*/src/main/AndroidManifest.xml' -exec sed -i '/package=".*"/d' {} +
           echo "=== Manifest 清理验证 ==="
-          grep -r 'package=' */src/main/AndroidManifest.xml || echo "✅ 无残留 package 属性"
+          grep -r 'package=' */src/main/AndroidManifest.xml || echo "✅ 无残留 package"
 
       - name: Fix QuickJS Manifest
         run: |
