@@ -30,38 +30,28 @@ jobs:
         run: |
           sed -i "s|distributionUrl=.*|distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-all.zip|g" gradle/wrapper/gradle-wrapper.properties
 
-      - name: Update AGP to 8.2.0
-        run: |
-          find . -name 'build.gradle' -exec sed -i -E "s/(com\.android\.tools\.build:gradle:)[^'\"]+/\18.2.0/g" {} +
-
-      - name: Clean Legacy Manifest
-        run: |
-          find . -path '*/src/main/AndroidManifest.xml' -exec sed -i '/package=".*"/d' {} +
-
       - name: Fix QuickJS Manifest
         run: |
           if [ -f "quickjs/src/main/AndroidManifest.xml" ]; then
-            # 修复关键语法问题
-            dos2unix quickjs/src/main/AndroidManifest.xml  # 处理换行符
-            sed -i 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /g' quickjs/src/main/AndroidManifest.xml
-            sed -i 's/<activity/<activity android:exported="true"/g' quickjs/src/main/AndroidManifest.xml
-            sed -i 's/<\/application>/<\/application>\n<\/manifest>/g' quickjs/src/main/AndroidManifest.xml  # 强制闭合标签
+            # 强制转换为Unix格式
+            dos2unix quickjs/src/main/AndroidManifest.xml
+            # 删除重复的xmlns声明
+            sed -i '/xmlns:android/d' quickjs/src/main/AndroidManifest.xml
+            # 添加唯一命名空间
+            sed -i '1s/<manifest/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/' quickjs/src/main/AndroidManifest.xml
+            # 强制闭合标签
+            sed -i 's/<\/application>/<\/application>\n<\/manifest>/g' quickjs/src/main/AndroidManifest.xml
+            # 标准化XML格式
             xmllint --format -o quickjs/src/main/AndroidManifest.xml quickjs/src/main/AndroidManifest.xml
           fi
 
-      - name: Inject Namespaces
+      - name: Validate XML Syntax
         run: |
-          find . -name 'build.gradle' -exec sed -i "/android {/a \    namespace 'com.github.tvbox.osc'" {} +
+          xmllint --noout quickjs/src/main/AndroidManifest.xml || (echo "❌ XML 校验失败"; exit 1)
 
-      - name: Force Dependencies
+      - name: Build Debug APK
         run: |
-          echo -e "\nallprojects {\n  configurations.all {\n    resolutionStrategy {\n      force 'com.android.tools.build:gradle:8.2.0'\n      force 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20'\n    }\n  }\n}" >> build.gradle
-
-      - name: Build & Verify
-        run: |
-          ./gradlew clean
-          xmllint --noout quickjs/src/main/AndroidManifest.xml
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew clean assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
