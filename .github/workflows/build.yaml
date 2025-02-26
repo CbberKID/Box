@@ -18,9 +18,10 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 新增步骤：安装 XML 工具包
-      - name: Install XML Tools
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+      - name: Install Essential Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils dos2unix
 
       - name: Fix Gradle Permissions
         run: chmod +x ./gradlew
@@ -33,37 +34,36 @@ jobs:
         run: |
           find . -name 'build.gradle' -exec sed -i -E "s/(com\.android\.tools\.build:gradle:)[^'\"]+/\18.2.0/g" {} +
 
-      - name: Clean Legacy Manifest Packages
+      - name: Clean Legacy Manifest
         run: |
           find . -path '*/src/main/AndroidManifest.xml' -exec sed -i '/package=".*"/d' {} +
-          echo "=== Manifest 清理验证 ==="
-          grep -r 'package=' */src/main/AndroidManifest.xml || echo "✅ 无残留 package"
 
       - name: Fix QuickJS Manifest
         run: |
           if [ -f "quickjs/src/main/AndroidManifest.xml" ]; then
-            # 修复 exported 属性
-            sed -i '/<activity/{/android:exported/!s/<activity/<activity android:exported="true"/g}' quickjs/src/main/AndroidManifest.xml
-            # XML 语法校验（依赖已安装的 xmllint）
-            xmllint --noout quickjs/src/main/AndroidManifest.xml || (echo "❌ XML 语法错误"; exit 1)
+            # 修复关键语法问题
+            dos2unix quickjs/src/main/AndroidManifest.xml  # 处理换行符
+            sed -i 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /g' quickjs/src/main/AndroidManifest.xml
+            sed -i 's/<activity/<activity android:exported="true"/g' quickjs/src/main/AndroidManifest.xml
+            sed -i 's/<\/application>/<\/application>\n<\/manifest>/g' quickjs/src/main/AndroidManifest.xml  # 强制闭合标签
+            xmllint --format -o quickjs/src/main/AndroidManifest.xml quickjs/src/main/AndroidManifest.xml
           fi
 
       - name: Inject Namespaces
         run: |
           find . -name 'build.gradle' -exec sed -i "/android {/a \    namespace 'com.github.tvbox.osc'" {} +
-          echo "=== 命名空间注入验证 ==="
-          grep -r "namespace 'com.github.tvbox.osc'" .
 
-      - name: Force Dependency Versions
+      - name: Force Dependencies
         run: |
           echo -e "\nallprojects {\n  configurations.all {\n    resolutionStrategy {\n      force 'com.android.tools.build:gradle:8.2.0'\n      force 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20'\n    }\n  }\n}" >> build.gradle
 
-      - name: Build Debug APK
+      - name: Build & Verify
         run: |
           ./gradlew clean
-          ./gradlew assembleDebug --stacktrace --refresh-dependencies
+          xmllint --noout quickjs/src/main/AndroidManifest.xml
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
